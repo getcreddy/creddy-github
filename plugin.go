@@ -178,8 +178,9 @@ func (p *GitHubPlugin) GetCredential(ctx context.Context, req *sdk.CredentialReq
 	}
 
 	return &sdk.Credential{
-		Value:     token.Token,
-		ExpiresAt: token.ExpiresAt,
+		Value:      token.Token,
+		ExpiresAt:  token.ExpiresAt,
+		ExternalID: token.Token, // Store token for revocation
 		Metadata: map[string]string{
 			"installation_id": fmt.Sprintf("%d", installationID),
 			"read_only":       fmt.Sprintf("%t", readOnly),
@@ -188,8 +189,34 @@ func (p *GitHubPlugin) GetCredential(ctx context.Context, req *sdk.CredentialReq
 }
 
 func (p *GitHubPlugin) RevokeCredential(ctx context.Context, externalID string) error {
-	// GitHub installation tokens cannot be explicitly revoked
-	// They expire automatically (max 1 hour)
+	// externalID is the token itself - use it to call GitHub's revoke endpoint
+	// DELETE /installation/token with the token in Authorization header
+	if externalID == "" {
+		return nil // No token to revoke
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "DELETE", "https://api.github.com/installation/token", nil)
+	if err != nil {
+		return fmt.Errorf("failed to create revoke request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+externalID)
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to revoke token: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// 204 = success, 401 = token already expired/invalid (also fine)
+	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusUnauthorized {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("GitHub revoke failed (%d): %s", resp.StatusCode, string(body))
+	}
+
 	return nil
 }
 
