@@ -3,7 +3,7 @@ module github.com/getcreddy/creddy-github
 go 1.24.0
 
 require (
-	github.com/getcreddy/creddy-plugin-sdk v0.0.0-20260222200520-65977e882824
+	github.com/getcreddy/creddy-plugin-sdk v0.0.0-20260223033639-e09e89c176ce
 	github.com/golang-jwt/jwt/v5 v5.3.1
 )
 
