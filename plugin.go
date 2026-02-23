@@ -180,7 +180,7 @@ func (p *GitHubPlugin) GetCredential(ctx context.Context, req *sdk.CredentialReq
 	return &sdk.Credential{
 		Value:      token.Token,
 		ExpiresAt:  token.ExpiresAt,
-		ExternalID: token.Token, // Token needed for revocation via DELETE /installation/token
+		Credential: token.Token, // Token needed for revocation via DELETE /installation/token
 		Metadata: map[string]string{
 			"installation_id": fmt.Sprintf("%d", installationID),
 			"read_only":       fmt.Sprintf("%t", readOnly),
