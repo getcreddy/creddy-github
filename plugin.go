@@ -180,7 +180,7 @@ func (p *GitHubPlugin) GetCredential(ctx context.Context, req *sdk.CredentialReq
 	return &sdk.Credential{
 		Value:      token.Token,
 		ExpiresAt:  token.ExpiresAt,
-		ExternalID: token.Token, // Store token for revocation
+		ExternalID: token.Token, // Token needed for revocation via DELETE /installation/token
 		Metadata: map[string]string{
 			"installation_id": fmt.Sprintf("%d", installationID),
 			"read_only":       fmt.Sprintf("%t", readOnly),
@@ -188,11 +188,10 @@ func (p *GitHubPlugin) GetCredential(ctx context.Context, req *sdk.CredentialReq
 	}, nil
 }
 
-func (p *GitHubPlugin) RevokeCredential(ctx context.Context, externalID string) error {
-	// externalID is the token itself - use it to call GitHub's revoke endpoint
-	// DELETE /installation/token with the token in Authorization header
-	if externalID == "" {
-		return nil // No token to revoke
+func (p *GitHubPlugin) RevokeCredential(ctx context.Context, token string) error {
+	// The token itself is passed here - use it to call GitHub's revoke endpoint
+	if token == "" {
+		return nil
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "DELETE", "https://api.github.com/installation/token", nil)
@@ -200,7 +199,7 @@ func (p *GitHubPlugin) RevokeCredential(ctx context.Context, externalID string) 
 		return fmt.Errorf("failed to create revoke request: %w", err)
 	}
 
-	req.Header.Set("Authorization", "Bearer "+externalID)
+	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
 
