@@ -83,6 +83,13 @@ func (p *GitHubPlugin) ConfigSchema(ctx context.Context) ([]sdk.ConfigField, err
 	}, nil
 }
 
+func (p *GitHubPlugin) Constraints(ctx context.Context) (*sdk.Constraints, error) {
+	return &sdk.Constraints{
+		MaxTTL:      time.Hour,
+		Description: "GitHub installation tokens have a maximum lifetime of 1 hour",
+	}, nil
+}
+
 func (p *GitHubPlugin) Configure(ctx context.Context, configJSON string) error {
 	var config GitHubConfig
 	if err := json.Unmarshal([]byte(configJSON), &config); err != nil {
@@ -134,10 +141,8 @@ func (p *GitHubPlugin) GetCredential(ctx context.Context, req *sdk.CredentialReq
 		return nil, fmt.Errorf("plugin not configured")
 	}
 
-	// GitHub installation tokens have a max TTL of 1 hour
-	if req.TTL > time.Hour {
-		return nil, fmt.Errorf("github tokens have a maximum TTL of 1 hour (requested: %s)", req.TTL)
-	}
+	// Note: TTL constraints are validated by the Creddy server before calling GetCredential.
+	// The Constraints() method declares MaxTTL = 1 hour.
 
 	// Parse the scope
 	pattern, perm, ok := parseGitHubScope(req.Scope)
