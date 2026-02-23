@@ -27,9 +27,13 @@ release-dev: build-all
 		$(BINARY_NAME)-darwin-arm64:application/octet-stream
 	@echo "Pushed! Install with: creddy plugin install ttl.sh/$(BINARY_NAME):dev"
 
-# Run tests
+# Run unit tests
 test:
 	go test -v ./...
+
+# Run integration tests (requires CREDDY_TEST_GITHUB_* env vars)
+test-integration:
+	go test -v -tags=integration ./...
 
 # Clean build artifacts
 clean:
