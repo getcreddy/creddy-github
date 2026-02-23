@@ -161,8 +161,8 @@ func (p *GitHubPlugin) GetCredential(ctx context.Context, req *sdk.CredentialReq
 		installationID = installations[0].ID
 	}
 
-	// Get the token
-	token, err := p.getInstallationToken(ctx, installationID, repos, readOnly)
+	// Get the token with requested TTL
+	token, err := p.getInstallationToken(ctx, installationID, repos, readOnly, req.TTL)
 	if err != nil {
 		return nil, err
 	}
@@ -255,7 +255,7 @@ func (p *GitHubPlugin) listInstallations(ctx context.Context) ([]installation, e
 	return installations, nil
 }
 
-func (p *GitHubPlugin) getInstallationToken(ctx context.Context, installationID int64, repos []string, readOnly bool) (*githubToken, error) {
+func (p *GitHubPlugin) getInstallationToken(ctx context.Context, installationID int64, repos []string, readOnly bool, ttl time.Duration) (*githubToken, error) {
 	jwtToken, err := p.generateJWT()
 	if err != nil {
 		return nil, err
@@ -264,6 +264,17 @@ func (p *GitHubPlugin) getInstallationToken(ctx context.Context, installationID 
 	url := fmt.Sprintf("https://api.github.com/app/installations/%d/access_tokens", installationID)
 
 	reqData := make(map[string]interface{})
+
+	// Set expiration if TTL provided (GitHub max is 1 hour)
+	if ttl > 0 {
+		expiresAt := time.Now().Add(ttl)
+		// GitHub max token lifetime is 1 hour
+		maxExpiry := time.Now().Add(1 * time.Hour)
+		if expiresAt.After(maxExpiry) {
+			expiresAt = maxExpiry
+		}
+		reqData["expires_at"] = expiresAt.UTC().Format(time.RFC3339)
+	}
 
 	if len(repos) > 0 {
 		repoNames := make([]string, len(repos))
