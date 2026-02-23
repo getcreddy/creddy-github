@@ -134,6 +134,11 @@ func (p *GitHubPlugin) GetCredential(ctx context.Context, req *sdk.CredentialReq
 		return nil, fmt.Errorf("plugin not configured")
 	}
 
+	// GitHub installation tokens have a max TTL of 1 hour
+	if req.TTL > time.Hour {
+		return nil, fmt.Errorf("github tokens have a maximum TTL of 1 hour (requested: %s)", req.TTL)
+	}
+
 	// Parse the scope
 	pattern, perm, ok := parseGitHubScope(req.Scope)
 	if !ok {
