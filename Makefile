@@ -20,12 +20,12 @@ build-all:
 # Then on test machine: creddy plugin install ttl.sh/creddy-<name>:dev
 release-dev: build-all
 	@echo "Pushing to ttl.sh (1h TTL)..."
-	oras push ttl.sh/creddy-$(BINARY_NAME):dev \
+	oras push ttl.sh/$(BINARY_NAME):dev \
 		./bin/$(BINARY_NAME)-linux-amd64:application/octet-stream \
 		./bin/$(BINARY_NAME)-linux-arm64:application/octet-stream \
 		./bin/$(BINARY_NAME)-darwin-amd64:application/octet-stream \
 		./bin/$(BINARY_NAME)-darwin-arm64:application/octet-stream
-	@echo "Pushed! Install with: creddy plugin install ttl.sh/creddy-$(BINARY_NAME):dev"
+	@echo "Pushed! Install with: creddy plugin install ttl.sh/$(BINARY_NAME):dev"
 
 # Run tests
 test:
