@@ -60,6 +60,29 @@ func (p *GitHubPlugin) Scopes(ctx context.Context) ([]sdk.ScopeSpec, error) {
 	}, nil
 }
 
+func (p *GitHubPlugin) ConfigSchema(ctx context.Context) ([]sdk.ConfigField, error) {
+	return []sdk.ConfigField{
+		{
+			Name:        "app_id",
+			Type:        "int",
+			Description: "GitHub App ID (found in app settings)",
+			Required:    true,
+		},
+		{
+			Name:        "private_key_pem",
+			Type:        "file",
+			Description: "Path to GitHub App private key (.pem file)",
+			Required:    true,
+		},
+		{
+			Name:        "installation_id",
+			Type:        "int",
+			Description: "GitHub App Installation ID (optional, auto-detected if not set)",
+			Required:    false,
+		},
+	}, nil
+}
+
 func (p *GitHubPlugin) Configure(ctx context.Context, configJSON string) error {
 	var config GitHubConfig
 	if err := json.Unmarshal([]byte(configJSON), &config); err != nil {
