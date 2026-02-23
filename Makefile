@@ -15,6 +15,18 @@ build-all:
 	GOOS=linux GOARCH=amd64 go build $(LDFLAGS) -o bin/$(BINARY_NAME)-linux-amd64 .
 	GOOS=linux GOARCH=arm64 go build $(LDFLAGS) -o bin/$(BINARY_NAME)-linux-arm64 .
 
+# Push to ttl.sh for dev testing (1 hour TTL)
+# Usage: make release-dev
+# Then on test machine: creddy plugin install ttl.sh/creddy-<name>:dev
+release-dev: build-all
+	@echo "Pushing to ttl.sh (1h TTL)..."
+	oras push ttl.sh/creddy-$(BINARY_NAME):dev \
+		./bin/$(BINARY_NAME)-linux-amd64:application/octet-stream \
+		./bin/$(BINARY_NAME)-linux-arm64:application/octet-stream \
+		./bin/$(BINARY_NAME)-darwin-amd64:application/octet-stream \
+		./bin/$(BINARY_NAME)-darwin-arm64:application/octet-stream
+	@echo "Pushed! Install with: creddy plugin install ttl.sh/creddy-$(BINARY_NAME):dev"
+
 # Run tests
 test:
 	go test -v ./...
