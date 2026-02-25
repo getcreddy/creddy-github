@@ -378,12 +378,21 @@ func parseGitHubScope(scope string) (pattern string, perm string, isGitHub bool)
 	}
 	rest := strings.TrimPrefix(scope, "github:")
 
+	var perm_ string
 	if strings.HasSuffix(rest, ":read") {
-		return strings.TrimSuffix(rest, ":read"), "read", true
-	}
-	if strings.HasSuffix(rest, ":write") {
-		return strings.TrimSuffix(rest, ":write"), "write", true
+		rest = strings.TrimSuffix(rest, ":read")
+		perm_ = "read"
+	} else if strings.HasSuffix(rest, ":write") {
+		rest = strings.TrimSuffix(rest, ":write")
+		perm_ = "write"
+	} else {
+		perm_ = "write"
 	}
 
-	return rest, "write", true
+	// Reject empty patterns (e.g., "github:" or "github::read")
+	if rest == "" {
+		return "", "", false
+	}
+
+	return rest, perm_, true
 }
