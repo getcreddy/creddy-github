@@ -105,7 +105,7 @@ jobs:
                 "arch": "$ARCH",
                 "filename": "$f",
                 "sha256": "$CHECKSUM",
-                "url": "https://pub-YOURID.r2.dev/plugins/${{ env.PLUGIN_NAME }}/$VERSION/$f"
+                "url": "https://plugins.creddy.dev/${{ env.PLUGIN_NAME }}/$VERSION/$f"
               }
           ENTRY
           done
@@ -128,18 +128,18 @@ jobs:
           R2_ENDPOINT="https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com"
           
           # Upload versioned files
-          aws s3 cp release/ "s3://${{ secrets.R2_BUCKET }}/plugins/${{ env.PLUGIN_NAME }}/$VERSION/" \
+          aws s3 cp release/ "s3://${{ secrets.R2_BUCKET }}/${{ env.PLUGIN_NAME }}/$VERSION/" \
             --recursive \
             --endpoint-url "$R2_ENDPOINT"
           
           # Copy to latest/
-          aws s3 cp release/ "s3://${{ secrets.R2_BUCKET }}/plugins/${{ env.PLUGIN_NAME }}/latest/" \
+          aws s3 cp release/ "s3://${{ secrets.R2_BUCKET }}/${{ env.PLUGIN_NAME }}/latest/" \
             --recursive \
             --endpoint-url "$R2_ENDPOINT"
           
           echo "✅ Published to R2:"
-          echo "   plugins/${{ env.PLUGIN_NAME }}/$VERSION/"
-          echo "   plugins/${{ env.PLUGIN_NAME }}/latest/"
+          echo "   https://plugins.creddy.dev/${{ env.PLUGIN_NAME }}/$VERSION/"
+          echo "   https://plugins.creddy.dev/${{ env.PLUGIN_NAME }}/latest/"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
