@@ -149,3 +149,11 @@ jobs:
         with:
           files: release/*
           generate_release_notes: true
+
+      - name: Update plugin registry
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.REGISTRY_PAT }}
+          repository: getcreddy/registry
+          event-type: plugin-release
+          client-payload: '{"plugin": "${{ env.PLUGIN_NAME }}", "version": "${{ steps.prep.outputs.version }}", "description": "GitHub App installation tokens with repository scoping"}'
