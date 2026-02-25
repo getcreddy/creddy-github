@@ -43,7 +43,8 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
         run: |
           BINARY_NAME="creddy-${{ env.PLUGIN_NAME }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}"
-          go build -ldflags="-s -w" -o "$BINARY_NAME" .
+          VERSION="${GITHUB_REF#refs/tags/}"
+          go build -ldflags="-s -w -X main.PluginVersion=${VERSION}" -o "$BINARY_NAME" .
           sha256sum "$BINARY_NAME" > "$BINARY_NAME.sha256"
 
       - name: Upload artifact

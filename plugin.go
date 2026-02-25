@@ -14,10 +14,10 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-const (
-	PluginName    = "github"
-	PluginVersion = "0.1.0"
-)
+const PluginName = "github"
+
+// Version is set at build time via -ldflags
+var PluginVersion = "dev"
 
 // GitHubPlugin implements the Creddy Plugin interface for GitHub
 type GitHubPlugin struct {
