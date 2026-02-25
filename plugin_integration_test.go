@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strconv"
 	"testing"
 	"time"
 
@@ -24,18 +25,28 @@ const (
 )
 
 func getTestConfigJSON(t *testing.T) string {
-	appID := os.Getenv(envAppID)
+	appIDStr := os.Getenv(envAppID)
 	privateKey := os.Getenv(envPrivateKey)
-	installationID := os.Getenv(envInstallationID)
+	installationIDStr := os.Getenv(envInstallationID)
 
-	if appID == "" {
+	if appIDStr == "" {
 		t.Fatalf("Required env var %s not set", envAppID)
 	}
 	if privateKey == "" {
 		t.Fatalf("Required env var %s not set", envPrivateKey)
 	}
-	if installationID == "" {
+	if installationIDStr == "" {
 		t.Fatalf("Required env var %s not set", envInstallationID)
+	}
+
+	appID, err := strconv.ParseInt(appIDStr, 10, 64)
+	if err != nil {
+		t.Fatalf("Invalid %s: %v", envAppID, err)
+	}
+
+	installationID, err := strconv.ParseInt(installationIDStr, 10, 64)
+	if err != nil {
+		t.Fatalf("Invalid %s: %v", envInstallationID, err)
 	}
 
 	config := map[string]interface{}{
