@@ -29,3 +29,5 @@ go.work.sum
 # Config files (may contain secrets)
 *config*.json
 *.pem
+
+.direnv/
