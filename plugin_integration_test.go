@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -22,7 +23,7 @@ const (
 	envTestRepo       = "CREDDY_TEST_GITHUB_REPO" // e.g., "getcreddy/creddy-test-repo"
 )
 
-func getTestConfig(t *testing.T) map[string]interface{} {
+func getTestConfigJSON(t *testing.T) string {
 	appID := os.Getenv(envAppID)
 	privateKey := os.Getenv(envPrivateKey)
 	installationID := os.Getenv(envInstallationID)
@@ -37,11 +38,18 @@ func getTestConfig(t *testing.T) map[string]interface{} {
 		t.Fatalf("Required env var %s not set", envInstallationID)
 	}
 
-	return map[string]interface{}{
+	config := map[string]interface{}{
 		"app_id":          appID,
 		"private_key_pem": privateKey,
 		"installation_id": installationID,
 	}
+
+	configJSON, err := json.Marshal(config)
+	if err != nil {
+		t.Fatalf("Failed to marshal config: %v", err)
+	}
+
+	return string(configJSON)
 }
 
 func getTestRepo(t *testing.T) string {
@@ -72,7 +80,7 @@ func githubAPICall(token, endpoint string) (*http.Response, error) {
 // actually invalidates the token on GitHub's side.
 func TestRevocationInvalidatesToken(t *testing.T) {
 	ctx := context.Background()
-	config := getTestConfig(t)
+	config := getTestConfigJSON(t)
 	testRepo := getTestRepo(t)
 
 	// 1. Configure plugin
@@ -135,7 +143,7 @@ func TestRevocationInvalidatesToken(t *testing.T) {
 // TestGetCredentialReturnsValidToken verifies basic token generation works.
 func TestGetCredentialReturnsValidToken(t *testing.T) {
 	ctx := context.Background()
-	config := getTestConfig(t)
+	config := getTestConfigJSON(t)
 	testRepo := getTestRepo(t)
 
 	plugin := &GitHubPlugin{}
