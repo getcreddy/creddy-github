@@ -106,8 +106,38 @@ make dev
 ### Testing
 
 ```bash
+# Unit tests
 make test
+
+# Integration tests (requires real GitHub App)
+make test-integration
 ```
+
+#### Integration Test Setup
+
+Integration tests require a dedicated GitHub App and test repository:
+
+1. Create a GitHub App for testing
+2. Create a private test repository (e.g., `getcreddy/creddy-test-repo`)
+3. Install the App on the test repository
+4. Set environment variables:
+
+```bash
+export CREDDY_TEST_GITHUB_APP_ID=123456
+export CREDDY_TEST_GITHUB_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----
+...
+-----END RSA PRIVATE KEY-----"
+export CREDDY_TEST_GITHUB_INSTALLATION_ID=78901234
+export CREDDY_TEST_GITHUB_REPO=getcreddy/creddy-test-repo
+```
+
+Then run:
+
+```bash
+make test-integration
+```
+
+The integration tests verify that token revocation actually invalidates tokens on GitHub's side.
 
 ## How It Works
 
