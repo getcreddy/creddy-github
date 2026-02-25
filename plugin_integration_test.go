@@ -3,6 +3,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -188,4 +189,258 @@ func TestGetCredentialReturnsValidToken(t *testing.T) {
 
 	// Clean up - revoke the token we created
 	_ = plugin.RevokeCredential(ctx, cred.Credential)
+}
+
+// TestReadOnlyTokenCannotWrite verifies that read-only scoped tokens
+// cannot perform write operations.
+func TestReadOnlyTokenCannotWrite(t *testing.T) {
+	ctx := context.Background()
+	config := getTestConfigJSON(t)
+	testRepo := getTestRepo(t)
+
+	plugin := &GitHubPlugin{}
+	err := plugin.Configure(ctx, config)
+	if err != nil {
+		t.Fatalf("Failed to configure plugin: %v", err)
+	}
+
+	// Get a read-only token
+	cred, err := plugin.GetCredential(ctx, &sdk.CredentialRequest{
+		Scope: fmt.Sprintf("github:%s:read", testRepo),
+		TTL:   time.Hour,
+	})
+	if err != nil {
+		t.Fatalf("Failed to get credential: %v", err)
+	}
+	defer plugin.RevokeCredential(ctx, cred.Credential)
+
+	t.Log("Got read-only token ✓")
+
+	// Verify we can read
+	resp, err := githubAPICall(cred.Value, fmt.Sprintf("/repos/%s", testRepo))
+	if err != nil {
+		t.Fatalf("API call failed: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("Expected 200 for read, got %d", resp.StatusCode)
+	}
+	t.Log("Read operation works ✓")
+
+	// Try to create an issue (write operation) - should fail
+	issueURL := fmt.Sprintf("https://api.github.com/repos/%s/issues", testRepo)
+	issueBody := `{"title":"Test issue from integration test","body":"This should fail"}`
+	req, err := http.NewRequest("POST", issueURL, bytes.NewBufferString(issueBody))
+	if err != nil {
+		t.Fatalf("Failed to create request: %v", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+cred.Value)
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err = client.Do(req)
+	if err != nil {
+		t.Fatalf("Write request failed: %v", err)
+	}
+	resp.Body.Close()
+
+	// Should get 403 Forbidden or 404 (GitHub returns 404 for permission denied on some endpoints)
+	if resp.StatusCode != http.StatusForbidden && resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("Expected 403 or 404 for write with read-only token, got %d", resp.StatusCode)
+	}
+	t.Logf("Write operation correctly denied with status %d ✓", resp.StatusCode)
+}
+
+// TestTTLIsRespected verifies that the token expiration matches the requested TTL.
+func TestTTLIsRespected(t *testing.T) {
+	ctx := context.Background()
+	config := getTestConfigJSON(t)
+	testRepo := getTestRepo(t)
+
+	plugin := &GitHubPlugin{}
+	err := plugin.Configure(ctx, config)
+	if err != nil {
+		t.Fatalf("Failed to configure plugin: %v", err)
+	}
+
+	// Request a 10-minute token
+	requestedTTL := 10 * time.Minute
+	before := time.Now()
+
+	cred, err := plugin.GetCredential(ctx, &sdk.CredentialRequest{
+		Scope: fmt.Sprintf("github:%s", testRepo),
+		TTL:   requestedTTL,
+	})
+	if err != nil {
+		t.Fatalf("Failed to get credential: %v", err)
+	}
+	defer plugin.RevokeCredential(ctx, cred.Credential)
+
+	after := time.Now()
+
+	// Calculate expected expiration window
+	expectedMin := before.Add(requestedTTL).Add(-1 * time.Minute) // Allow 1 min slack
+	expectedMax := after.Add(requestedTTL).Add(1 * time.Minute)
+
+	if cred.ExpiresAt.Before(expectedMin) || cred.ExpiresAt.After(expectedMax) {
+		t.Fatalf("Token expiration %v outside expected range [%v, %v]",
+			cred.ExpiresAt, expectedMin, expectedMax)
+	}
+
+	actualTTL := cred.ExpiresAt.Sub(before)
+	t.Logf("Requested TTL: %v, actual TTL: ~%v ✓", requestedTTL, actualTTL.Round(time.Second))
+}
+
+// TestConcurrentTokenGeneration verifies multiple tokens can be generated in parallel.
+func TestConcurrentTokenGeneration(t *testing.T) {
+	ctx := context.Background()
+	config := getTestConfigJSON(t)
+	testRepo := getTestRepo(t)
+
+	plugin := &GitHubPlugin{}
+	err := plugin.Configure(ctx, config)
+	if err != nil {
+		t.Fatalf("Failed to configure plugin: %v", err)
+	}
+
+	const numTokens = 5
+	results := make(chan *sdk.Credential, numTokens)
+	errors := make(chan error, numTokens)
+
+	// Generate tokens concurrently
+	for i := 0; i < numTokens; i++ {
+		go func(id int) {
+			cred, err := plugin.GetCredential(ctx, &sdk.CredentialRequest{
+				Scope: fmt.Sprintf("github:%s", testRepo),
+				TTL:   time.Hour,
+			})
+			if err != nil {
+				errors <- fmt.Errorf("token %d: %w", id, err)
+				return
+			}
+			results <- cred
+		}(i)
+	}
+
+	// Collect results
+	var tokens []*sdk.Credential
+	for i := 0; i < numTokens; i++ {
+		select {
+		case cred := <-results:
+			tokens = append(tokens, cred)
+		case err := <-errors:
+			t.Fatalf("Concurrent generation failed: %v", err)
+		case <-time.After(30 * time.Second):
+			t.Fatal("Timeout waiting for concurrent tokens")
+		}
+	}
+
+	t.Logf("Generated %d tokens concurrently ✓", len(tokens))
+
+	// Verify all tokens are unique and valid
+	seen := make(map[string]bool)
+	for i, cred := range tokens {
+		if seen[cred.Value] {
+			t.Fatalf("Token %d is a duplicate", i)
+		}
+		seen[cred.Value] = true
+
+		// Verify each token works
+		resp, err := githubAPICall(cred.Value, fmt.Sprintf("/repos/%s", testRepo))
+		if err != nil {
+			t.Fatalf("Token %d API call failed: %v", i, err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("Token %d got status %d", i, resp.StatusCode)
+		}
+	}
+	t.Log("All tokens are unique and valid ✓")
+
+	// Clean up
+	for _, cred := range tokens {
+		_ = plugin.RevokeCredential(ctx, cred.Credential)
+	}
+}
+
+// TestInvalidScopeReturnsError verifies that invalid scopes are rejected.
+func TestInvalidScopeReturnsError(t *testing.T) {
+	ctx := context.Background()
+	config := getTestConfigJSON(t)
+
+	plugin := &GitHubPlugin{}
+	err := plugin.Configure(ctx, config)
+	if err != nil {
+		t.Fatalf("Failed to configure plugin: %v", err)
+	}
+
+	testCases := []struct {
+		name  string
+		scope string
+	}{
+		{"empty scope", ""},
+		{"wrong prefix", "gitlab:owner/repo"},
+		{"no prefix", "owner/repo"},
+		{"just github", "github"},
+		{"trailing colon", "github:"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := plugin.GetCredential(ctx, &sdk.CredentialRequest{
+				Scope: tc.scope,
+				TTL:   time.Hour,
+			})
+			if err == nil {
+				t.Errorf("Expected error for scope %q, got nil", tc.scope)
+			} else {
+				t.Logf("Scope %q correctly rejected: %v ✓", tc.scope, err)
+			}
+		})
+	}
+}
+
+// TestConfigureValidation verifies configuration validation.
+func TestConfigureValidation(t *testing.T) {
+	ctx := context.Background()
+
+	testCases := []struct {
+		name   string
+		config map[string]interface{}
+	}{
+		{
+			name:   "missing app_id",
+			config: map[string]interface{}{"private_key_pem": "fake"},
+		},
+		{
+			name:   "missing private_key",
+			config: map[string]interface{}{"app_id": int64(12345)},
+		},
+		{
+			name: "invalid private_key",
+			config: map[string]interface{}{
+				"app_id":          int64(12345),
+				"private_key_pem": "not-a-valid-pem-key",
+			},
+		},
+		{
+			name:   "empty config",
+			config: map[string]interface{}{},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			configJSON, _ := json.Marshal(tc.config)
+			plugin := &GitHubPlugin{}
+			err := plugin.Configure(ctx, string(configJSON))
+			if err == nil {
+				t.Errorf("Expected error for %s, got nil", tc.name)
+			} else {
+				t.Logf("%s correctly rejected: %v ✓", tc.name, err)
+			}
+		})
+	}
 }
