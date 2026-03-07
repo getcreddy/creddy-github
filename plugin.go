@@ -389,6 +389,16 @@ func parseGitHubScope(scope string) (pattern string, perm string, isGitHub bool)
 		perm_ = "write"
 	}
 
+	// Handle shorthand: "github:read" or "github:write" means all repos
+	if rest == "read" || rest == "write" {
+		if rest == "read" {
+			perm_ = "read"
+		} else {
+			perm_ = "write"
+		}
+		rest = "*" // Treat as all repos
+	}
+
 	// Reject empty patterns (e.g., "github:" or "github::read")
 	if rest == "" {
 		return "", "", false
